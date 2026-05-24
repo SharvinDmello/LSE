@@ -3,7 +3,10 @@ let allUnits = [];
 let currentQuestions = [];
 let score = 0;
 let answered = 0;
-let selectedUnit = 0; // 0 = all units
+let selectedUnit = "0"; // "0" = all units, "<id>" = unit, "<id>-wrong" = unit wrong-review
+const wrongAnswersByUnit = {};
+const questionToUnit = {};
+const allQuestionsLookup = {};
 
 // ─── Shuffle helper ───────────────────────────────────────────────────────────
 function shuffle(arr) {
@@ -21,6 +24,14 @@ async function loadQuestions() {
     const res = await fetch("questions.json");
     const data = await res.json();
     allUnits = data.units;
+
+    allUnits.forEach((unit) => {
+      unit.questions.forEach((q) => {
+        questionToUnit[q.id] = unit.id;
+        allQuestionsLookup[q.id] = q;
+      });
+    });
+
     buildUnitSelector();
     startExam();
   } catch (e) {
@@ -38,24 +49,36 @@ function buildUnitSelector() {
   allBtn.className = "tab-btn active";
   allBtn.textContent = "All Units";
   allBtn.dataset.unit = "0";
-  allBtn.addEventListener("click", () => switchUnit(0, allBtn));
+  allBtn.addEventListener("click", () => switchUnit("0", allBtn));
   bar.appendChild(allBtn);
 
   allUnits.forEach((unit) => {
     const btn = document.createElement("button");
     btn.className = "tab-btn";
     btn.textContent = `Unit ${unit.id}`;
-    btn.dataset.unit = unit.id;
-    btn.addEventListener("click", () => switchUnit(unit.id, btn));
+    btn.dataset.unit = `${unit.id}`;
+    btn.addEventListener("click", () => switchUnit(`${unit.id}`, btn));
     bar.appendChild(btn);
+
+    const wrongBtn = document.createElement("button");
+    wrongBtn.className = "tab-btn wrong-tab";
+    wrongBtn.textContent = `Unit ${unit.id} Review`;
+    wrongBtn.dataset.unit = `${unit.id}-wrong`;
+    wrongBtn.addEventListener("click", () => switchUnit(`${unit.id}-wrong`, wrongBtn));
+    bar.appendChild(wrongBtn);
   });
 }
 
 function switchUnit(unitId, clickedBtn) {
   document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
   clickedBtn.classList.add("active");
-  selectedUnit = unitId;
+  selectedUnit = `${unitId}`;
   startExam();
+}
+
+function getUnitTitle(unitId) {
+  const unit = allUnits.find((u) => u.id === unitId);
+  return unit ? unit.title : `Unit ${unitId}`;
 }
 
 // ─── Start / reset exam ───────────────────────────────────────────────────────
@@ -63,10 +86,15 @@ function startExam() {
   score = 0;
   answered = 0;
 
-  if (selectedUnit === 0) {
+  if (selectedUnit === "0") {
     currentQuestions = allUnits.flatMap((u) => u.questions);
+  } else if (selectedUnit.endsWith("-wrong")) {
+    const unitId = parseInt(selectedUnit.split("-")[0], 10);
+    const wrongIds = wrongAnswersByUnit[unitId] ? Array.from(wrongAnswersByUnit[unitId]) : [];
+    currentQuestions = wrongIds.map((id) => allQuestionsLookup[id]).filter(Boolean);
   } else {
-    const unit = allUnits.find((u) => u.id === selectedUnit);
+    const unitId = parseInt(selectedUnit, 10);
+    const unit = allUnits.find((u) => u.id === unitId);
     currentQuestions = unit ? [...unit.questions] : [];
   }
 
@@ -84,6 +112,21 @@ function startExam() {
 function renderQuestions() {
   const container = document.getElementById("quiz-container");
   container.innerHTML = "";
+
+  if (!currentQuestions.length) {
+    const emptyMessage = document.createElement("div");
+    emptyMessage.className = "error-msg";
+
+    if (selectedUnit.endsWith("-wrong")) {
+      const unitId = parseInt(selectedUnit.split("-")[0], 10);
+      emptyMessage.textContent = `No wrong answers for ${getUnitTitle(unitId)} yet. Complete the unit quiz first to build a review list.`;
+    } else {
+      emptyMessage.textContent = "No questions are available for this selection.";
+    }
+
+    container.appendChild(emptyMessage);
+    return;
+  }
 
   currentQuestions.forEach((q, idx) => {
     const card = document.createElement("div");
@@ -127,6 +170,17 @@ function handleAnswer(qid, selectedOpt, clickedBtn) {
 
   const q = currentQuestions.find((q) => q.id === qid);
   const isCorrect = selectedOpt === q.answer;
+
+  const unitId = questionToUnit[qid];
+  if (!wrongAnswersByUnit[unitId]) {
+    wrongAnswersByUnit[unitId] = new Set();
+  }
+
+  if (isCorrect) {
+    wrongAnswersByUnit[unitId].delete(qid);
+  } else {
+    wrongAnswersByUnit[unitId].add(qid);
+  }
 
   answered++;
   if (isCorrect) score++;
@@ -173,6 +227,15 @@ function updateScoreboard() {
 }
 
 // ─── Completion banner ────────────────────────────────────────────────────────
+function clearReviewUnit(unitId) {
+  if (wrongAnswersByUnit[unitId]) {
+    delete wrongAnswersByUnit[unitId];
+  }
+  if (selectedUnit === `${unitId}-wrong`) {
+    startExam();
+  }
+}
+
 function checkCompletion() {
   if (answered < currentQuestions.length) return;
 
@@ -185,10 +248,22 @@ function checkCompletion() {
 
   const banner = document.createElement("div");
   banner.className = `completion-banner ${gradeClass}`;
+
+  const retryLabel = selectedUnit.endsWith("-wrong")
+    ? "Retry Review"
+    : "Retry with Shuffled Questions";
+
+  const clearButton = selectedUnit.endsWith("-wrong")
+    ? `<button class="clear-btn" onclick="clearReviewUnit(${parseInt(selectedUnit.split('-')[0], 10)})">Clear Unit Review</button>`
+    : "";
+
   banner.innerHTML = `
     <div class="comp-title">${grade}</div>
     <div class="comp-stats">You scored <strong>${score}/${currentQuestions.length}</strong> (${pct}%)</div>
-    <button class="retry-btn" onclick="startExam()"> Retry with Shuffled Questions</button>
+    <div class="completion-actions">
+      <button class="retry-btn" onclick="startExam()">${retryLabel}</button>
+      ${clearButton}
+    </div>
   `;
   document.getElementById("quiz-container").prepend(banner);
   banner.scrollIntoView({ behavior: "smooth", block: "start" });

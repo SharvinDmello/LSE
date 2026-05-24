@@ -147,17 +147,15 @@ header {
   font-family: inherit;
 }
 
-.tab-btn:hover {
-  color: var(--text);
-  border-color: var(--accent);
-  background: rgba(108,99,255,.08);
+.tab-btn.wrong-tab {
+  color: var(--accent2);
+  border-color: rgba(167,139,250,.65);
 }
 
-.tab-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
+.tab-btn.wrong-tab:hover {
   color: #fff;
-  font-weight: 600;
+  border-color: var(--accent2);
+  background: rgba(167,139,250,.12);
 }
 
 /* ─── Main Content ──────────────────────────────────────────────────────────── */
@@ -367,6 +365,33 @@ main {
 .retry-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(108,99,255,.4);
+}
+
+.clear-btn {
+  background: transparent;
+  border: 1px solid rgba(239,68,68,.65);
+  color: #fda4af;
+  border-radius: 30px;
+  padding: 12px 26px;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 12px;
+  transition: all .2s ease;
+  font-family: inherit;
+}
+
+.clear-btn:hover {
+  background: rgba(239,68,68,.12);
+  color: #fecaca;
+  border-color: var(--wrong);
+}
+
+.completion-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 /* ─── Error ─────────────────────────────────────────────────────────────────── */
